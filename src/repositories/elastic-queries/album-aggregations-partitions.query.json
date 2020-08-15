@@ -1,0 +1,55 @@
+{
+  "albums": {
+    "terms": {
+      "field": "album.id",
+      "include": {
+         "partition": 0,
+         "num_partitions": 34
+      },
+      "size": 100,
+      "order": {
+         "_key": "asc"
+      }
+    },
+    "aggs": {
+      "periodo": {
+        "date_histogram": {
+          "field": "periodo",
+          "interval": "month",
+          "format": "yyyy-MM",
+          "order": {
+            "_key": "desc"
+          }
+        },
+        "aggs": {
+          "ingreso_afiliado_nested": {
+            "nested": {
+              "path": "ingresoAfiliado"
+            },
+            "aggs": {
+              "sum_monto_afiliado": {
+                "sum": {
+                  "field": "ingresoAfiliado.montoAfiliado"
+                }
+              }
+            }
+          }
+        }
+      },
+      "top": {
+        "top_hits": {
+          "_source": {
+            "includes": [ "album.titulo", "album.artista.nombres", "album.upc" ]
+          },
+          "size": 1
+        }
+      }
+    }
+  },
+  "stats_album_terms": {
+    "stats_bucket": {
+      "buckets_path": "albums._count" 
+    }
+  }
+  
+}
