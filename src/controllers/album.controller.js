@@ -35,14 +35,10 @@ module.exports = class AlbumController {
   }
 
   transform(originalResponse) {
-    console.log('begin transform');
     const buckets = originalResponse.aggregations.albums.buckets;
-    console.log(JSON.stringify(buckets.length));
-    const result = buckets.map((b) => {
+    return buckets.map((b) => {
       return this.transformItem(b);
     });
-    console.log('end transform', result);
-    return result;
   }
 
   transformItem(item) {
