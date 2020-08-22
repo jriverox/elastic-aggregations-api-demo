@@ -12,7 +12,7 @@ module.exports = class AlbumRepository {
     this.type = process.env.ELASTIC_INDEX_TYPE;
   }
 
-  async getDistinctCount() {
+  async getBucketDistinctCount() {
     const aggs = {
       albums_count: {
         cardinality: {
@@ -41,7 +41,7 @@ module.exports = class AlbumRepository {
     return aggs;
   }
 
-  async getPagedBuckets(query, size = 0, partition = 0, numPartitions = 0) {
+  async getPagedBuckets(params, size = 0, partition = 0, numPartitions = 0) {
     const aggs = this.prepareAggsPartitionsQuery(size, partition, numPartitions);
 
     const result = await this.client.search({
@@ -53,5 +53,90 @@ module.exports = class AlbumRepository {
       },
     });
     return result;
+  }
+
+  async bulkDocuments(documents, indexName) {
+    const body = this.getBulkBody(documents, indexName);
+    return await this.client.bulk({ body });
+  }
+
+  getBulkBody(documents, indexName) {
+    const body = [];
+    for (const document of documents) {
+      const item = this.getBulkItem(document.id, document, indexName);
+      body.push(item.header);
+      body.push(item.doc);
+    }
+    return body;
+  }
+
+  getBulkItem(id, doc, indexName) {
+    const cloneDoc = Object.assign({}, doc);
+    delete cloneDoc.id;
+
+    return {
+      header: {
+        update: {
+          _index: indexName,
+          _type: '_doc',
+          _id: id,
+        },
+      },
+      doc: {
+        doc: cloneDoc,
+        doc_as_upsert: true,
+      },
+    };
+  }
+
+  async cacheHasData(partitionKey, indexName) {
+    const exists = await this.client.indices.exists({ index: indexName });
+    if (!exists) return false;
+
+    const result = await this.client.count({
+      index: indexName,
+      body: {
+        query: this.getQuery(partitionKey),
+      },
+    });
+
+    return result.count > 0;
+  }
+
+  async getDocumentsFromCache(partitionKey, indexName, size = 10, from = 0) {
+    const exists = await this.client.indices.exists({ index: indexName });
+    if (!exists) return false;
+
+    const result = await this.client.search({
+      index: indexName,
+      body: {
+        size: size,
+        from: from,
+        query: this.getQuery(partitionKey),
+        sort: [
+          {
+            total: {
+              order: 'desc',
+            },
+          },
+          {
+            periodo: {
+              order: 'desc',
+            },
+          },
+        ],
+      },
+    });
+    if (result.hits.hits.length === 0) return [];
+
+    return result.hits.hits.map((item) => {
+      return item._source;
+    });
+  }
+
+  getQuery(partitionKey) {
+    return {
+      term: { 'partitionKey.keyword': partitionKey },
+    };
   }
 };

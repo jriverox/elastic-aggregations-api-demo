@@ -3,7 +3,7 @@ const app = express();
 const AlbumController = require('./controllers/album.controller');
 const albumController = new AlbumController();
 
-app.get('/', albumController.getAllBuckets.bind(albumController));
+app.get('/', albumController.getSummary.bind(albumController));
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
