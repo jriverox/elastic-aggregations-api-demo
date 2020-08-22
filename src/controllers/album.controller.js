@@ -14,19 +14,16 @@ module.exports = class AlbumController {
       console.log('entro');
       const distinctCount = await repository.getDistinctCount();
       console.log(distinctCount);
-      const numPartitions = distinctCount > pageSize ? Math.ceil(distinctCount / pageSize) : distinctCount;
-      // const numPartitions = 3;
-      const allPagesResult = [];
+      //const numPartitions = distinctCount > pageSize ? Math.ceil(distinctCount / pageSize) : distinctCount;
+      const numPartitions = 4;
+      let allPagesResult = [];
       for (let partition = 0; partition < numPartitions; partition++) {
         console.log('page:', partition);
         const response = await repository.getPagedBuckets(null, pageSize, partition, numPartitions);
-        // console.log(response);
         const simplifiedArray = this.transform(response);
-        // console.log(simplifiedArray);
         allPagesResult.push(...simplifiedArray);
       }
-      // _.orderBy(allPagesResult, 'periodos.total', 'desc');
-      // allPagesResult.sort((a, b) => b - a);
+      allPagesResult = _.orderBy(allPagesResult, ['total', 'periodo', 'titulo'], ['desc', 'desc', 'asc']);
       res.json(allPagesResult);
     } catch (error) {
       res.status(500);
@@ -36,26 +33,26 @@ module.exports = class AlbumController {
 
   transform(originalResponse) {
     const buckets = originalResponse.aggregations.albums.buckets;
-    return buckets.map((b) => {
-      return this.transformItem(b);
+    const items = [];
+    buckets.forEach((bucket) => {
+      items.push(...this.transformItem(bucket));
     });
+    return items;
   }
 
   transformItem(item) {
     const album = item.top.hits.hits[0]._source.album;
-    // console.log(JSON.stringify(item));
-    return {
-      id: item.key,
-      titulo: album.titulo,
-      upc: album.upc,
-      artista: album.artista ? album.artista.nombres : '',
-      periodos: item.periodo.buckets.map((p) => {
-        return {
-          periodo: p.key_as_string,
-          count: p.doc_count,
-          total: p.ingreso_afiliado_nested.sum_monto_afiliado.value,
-        };
-      }),
-    };
+    const artista = album.artista ? album.artista.nombres : '';
+
+    return item.periodo.buckets.map((periodo) => {
+      return {
+        id: item.key,
+        titulo: album.titulo || '',
+        upc: album.upc || '',
+        artista: artista,
+        periodo: periodo.key_as_string,
+        total: periodo.ingreso_afiliado_nested.sum_monto_afiliado.value,
+      };
+    });
   }
 };
